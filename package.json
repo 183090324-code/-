@@ -9,7 +9,6 @@
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    // --- 以下是新增的部署脚本，其他内容完全保留原样 ---
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist"
   },
