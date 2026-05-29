@@ -1,0 +1,6 @@
+{
+  "name": "TwinBuild 智能建造三维仿真与离线编程平台",
+  "description": "面向重型建筑机器人的高保真三维仿真、轨迹规划、离线编程与双机协同碰撞防护调试工业级仿真软件系统。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
