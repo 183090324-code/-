@@ -1,16 +1,87 @@
 import React, { useEffect, useState } from "react";
-import { TelemetryData } from "../types";
+import * as THREE from "three";
+import { TelemetryData, ConstructionProcess } from "../types";
 import { Activity, Compass, Cpu, Zap } from "lucide-react";
 
 interface ParametersPanelProps {
+  activeProcess: ConstructionProcess;
   sceneType: "spray" | "pour";
   telemetry: TelemetryData;
+  clickPoints: THREE.Vector3[];
+  setClickPoints: React.Dispatch<React.SetStateAction<THREE.Vector3[]>>;
 }
 
 export const ParametersPanel: React.FC<ParametersPanelProps> = ({
+  activeProcess,
   sceneType,
   telemetry,
+  clickPoints,
+  setClickPoints,
 }) => {
+  // Input fields for coordinates custom planner
+  const [posX, setPosX] = useState<string>("0.10");
+  const [posY, setPosY] = useState<string>("0.98");
+  const [posZ, setPosZ] = useState<string>("-0.10");
+
+  // Automatically update input presets according to active process
+  useEffect(() => {
+    switch (activeProcess) {
+      case "rebar_lay":
+      case "rebar_tie":
+        setPosX("0.10");
+        setPosY("0.98");
+        setPosZ("-0.10");
+        break;
+      case "concrete_pour":
+      case "concrete_flat":
+        setPosX("0.05");
+        setPosY("0.93");
+        setPosZ("-0.05");
+        break;
+      case "brick_lay":
+        setPosX("0.10");
+        setPosY("0.90");
+        setPosZ("-0.08");
+        break;
+      case "tile_lay":
+        setPosX("0.10");
+        setPosY("0.91");
+        setPosZ("-0.05");
+        break;
+      case "spray_wall":
+        setPosX("0.10");
+        setPosY("1.10");
+        setPosZ("-0.15");
+        break;
+      default:
+        setPosX("0.10");
+        setPosY("0.98");
+        setPosZ("-0.10");
+    }
+  }, [activeProcess]);
+
+  const handleAddNode = () => {
+    const x = parseFloat(posX);
+    const y = parseFloat(posY);
+    const z = parseFloat(posZ);
+    if (isNaN(x) || isNaN(y) || isNaN(z)) {
+      alert("请输入有效的x, y, z坐标参数！");
+      return;
+    }
+
+    if (clickPoints.length >= 5) {
+      alert("智能建造算法最多支持规划5个核心控制节点！");
+      return;
+    }
+
+    const newPt = new THREE.Vector3(x, y, z);
+    setClickPoints((prev) => [...prev, newPt]);
+  };
+
+  const handleClearNodes = () => {
+    setClickPoints([]);
+  };
+
   // Add slight dynamic flickering noise to power and pressure readings to resemble real physical system
   const [flickeredTelemetry, setFlickeredTelemetry] = useState<TelemetryData>(telemetry);
 
@@ -205,6 +276,103 @@ export const ParametersPanel: React.FC<ParametersPanelProps> = ({
             </div>
           </div>
         )}
+
+        {/* SECTION 5: CUSTOM COORDINATES INPUT (作业节点自定义规划) */}
+        <div className="space-y-3 border-t border-slate-800 pt-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-indigo-400 font-mono font-medium tracking-wider uppercase flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+              <span>工艺轨迹节点规划 (x, y, z Coordinates)</span>
+            </span>
+            <span className="text-[10px] text-slate-500 font-mono bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800">
+              节点数: <span className="text-indigo-400 font-bold">{clickPoints.length} / 5</span>
+            </span>
+          </div>
+
+          {/* Guidelines details */}
+          <div className="text-[9px] text-slate-500 font-sans leading-relaxed">
+            坐标范围建议: X[-0.4,0.4], Y[0.88,1.25], Z[-0.4,0.4] (Y为高度)
+          </div>
+
+          {/* Coordinate Inputs Form */}
+          <div className="grid grid-cols-3 gap-2">
+            <div className="bg-slate-950 border border-slate-800 rounded px-2 py-1 flex items-center gap-1">
+              <span className="text-[10px] text-slate-500 font-mono">X:</span>
+              <input
+                type="number"
+                step="0.01"
+                min="-0.8"
+                max="0.8"
+                value={posX}
+                onChange={(e) => setPosX(e.target.value)}
+                className="bg-transparent w-full font-mono text-xs text-slate-200 border-none outline-none p-0 focus:ring-0 focus:outline-none"
+              />
+            </div>
+            <div className="bg-slate-950 border border-slate-800 rounded px-2 py-1 flex items-center gap-1">
+              <span className="text-[10px] text-slate-500 font-mono">Y:</span>
+              <input
+                type="number"
+                step="0.01"
+                min="0.5"
+                max="1.6"
+                value={posY}
+                onChange={(e) => setPosY(e.target.value)}
+                className="bg-transparent w-full font-mono text-xs text-slate-200 border-none outline-none p-0 focus:ring-0 focus:outline-none"
+              />
+            </div>
+            <div className="bg-slate-950 border border-slate-800 rounded px-2 py-1 flex items-center gap-1">
+              <span className="text-[10px] text-slate-500 font-mono">Z:</span>
+              <input
+                type="number"
+                step="0.01"
+                min="-0.8"
+                max="0.8"
+                value={posZ}
+                onChange={(e) => setPosZ(e.target.value)}
+                className="bg-transparent w-full font-mono text-xs text-slate-200 border-none outline-none p-0 focus:ring-0 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              onClick={handleAddNode}
+              className="flex-1 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs rounded transition flex items-center justify-center gap-1 cursor-pointer"
+            >
+              <span>+ 添加节点</span>
+            </button>
+            <button
+              onClick={handleClearNodes}
+              className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 text-xs rounded transition cursor-pointer"
+              title="清空所有坐标节点"
+            >
+              清空
+            </button>
+          </div>
+
+          {/* List of current nodes coordinates, interactive delete */}
+          {clickPoints.length > 0 && (
+            <div className="max-h-[110px] overflow-y-auto border border-slate-800/80 bg-slate-950/40 rounded p-1 space-y-1">
+              {clickPoints.map((pt, idx) => (
+                <div key={idx} className="flex items-center justify-between text-[10px] font-mono bg-slate-950 px-2 py-1 border border-slate-850 rounded">
+                  <span className="text-indigo-400 font-bold">P{idx + 1}</span>
+                  <span className="text-slate-400">
+                    X:{pt.x.toFixed(2)} Y:{pt.y.toFixed(2)} Z:{pt.z.toFixed(2)}
+                  </span>
+                  <button
+                    onClick={() => {
+                      setClickPoints((prev) => prev.filter((_, i) => i !== idx));
+                    }}
+                    className="text-red-500 hover:text-red-400 cursor-pointer font-bold px-1"
+                    title="删除该节点"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
       </div>
     </div>

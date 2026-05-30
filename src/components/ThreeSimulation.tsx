@@ -55,6 +55,28 @@ export const ThreeSimulation: React.FC<ThreeSimulationProps> = ({
   const simulatedTimeRef = useRef<number>(0);
   const [hoveredPoint, setHoveredPoint] = useState<THREE.Vector3 | null>(null);
 
+  // Refs to prevent stale closure inside the 3D render tick loop
+  const isRunningRef = useRef(isRunning);
+  const isPausedRef = useRef(isPaused);
+  const clickPointsRef = useRef(clickPoints);
+  const playSpeedRef = useRef(playSpeed);
+
+  useEffect(() => {
+    isRunningRef.current = isRunning;
+  }, [isRunning]);
+
+  useEffect(() => {
+    isPausedRef.current = isPaused;
+  }, [isPaused]);
+
+  useEffect(() => {
+    clickPointsRef.current = clickPoints;
+  }, [clickPoints]);
+
+  useEffect(() => {
+    playSpeedRef.current = playSpeed;
+  }, [playSpeed]);
+
   // Handle environment setup and updates
   useEffect(() => {
     if (!mountRef.current) return;
@@ -284,11 +306,11 @@ export const ThreeSimulation: React.FC<ThreeSimulationProps> = ({
     const handleMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.8 });
     
     const handleL = new THREE.Mesh(handleGeo, handleMat);
-    handleL.position.set(-0.05, frameHeight / 2, frameDepth / 2);
+    handleL.position.set(0.25, 0, 0.012);
     frontDoorLeft.add(handleL);
 
     const handleR = handleL.clone();
-    handleR.position.set(0.05, frameHeight / 2, frameDepth / 2);
+    handleR.position.set(-0.25, 0, 0.012);
     frontDoorRight.add(handleR);
 
     // Left and right Slate side panels
@@ -459,295 +481,614 @@ export const ThreeSimulation: React.FC<ThreeSimulationProps> = ({
     robotGroup.position.set(0, 0.86, 0.25); // secure atop slot table
     robotGroupRef.current = robotGroup;
 
-    // cobot aesthetic materials matching image A
+    // Premium industrial robotic materials
     const armMat = new THREE.MeshStandardMaterial({
-      color: 0xf8fafc, // premium clean robot white link covers
-      roughness: 0.3,
+      color: 0xf8fafc, // High-gloss clean white shell
+      roughness: 0.15,
       metalness: 0.1,
     });
     const jointMat = new THREE.MeshStandardMaterial({
-      color: 0x0284c7, // signature blue sleeves / bands
-      metalness: 0.6,
-      roughness: 0.2,
+      color: 0x2563eb, // High-gloss cobalt safety blue sleeves / bands
+      metalness: 0.4,
+      roughness: 0.15,
     });
     const metalMat = new THREE.MeshStandardMaterial({
-      color: 0x1e293b, // dark titanium connector links
+      color: 0x1e293b, // Dark titanium/carbide connector gears
+      metalness: 0.85,
+      roughness: 0.25,
+    });
+    const steelMat = new THREE.MeshStandardMaterial({
+      color: 0xf1f5f9, // Reflective chrome / polished steel rods and pistons
+      metalness: 0.95,
+      roughness: 0.1,
+    });
+    const darkCableMat = new THREE.MeshStandardMaterial({
+      color: 0x0f172a, // Flexible black corrugated wire looms
+      roughness: 0.9,
+    });
+    const brassMat = new THREE.MeshStandardMaterial({
+      color: 0xeab308, // Dynamic bright brass fasteners/fastening caps
       metalness: 0.8,
-      roughness: 0.3,
+      roughness: 0.15,
+    });
+    const ledGlowMat = new THREE.MeshStandardMaterial({
+      color: 0x0ea5e9,
+      emissive: 0x0ea5e9,
+      emissiveIntensity: 1.5,
     });
 
-    // J1 Base Tower (Turret)
+    // 0. Solid Base Anchored Ground Plate (High Realism Foundation)
+    const basePlate = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.19, 0.02, 8), metalMat);
+    basePlate.position.y = 0.01;
+    basePlate.receiveShadow = true;
+    basePlate.castShadow = true;
+    robotGroup.add(basePlate);
+
+    // 4 Heavy Golden Anchor Bolts holding the robot to the T-slots
+    const boltAngles = [Math.PI / 4, (Math.PI * 3) / 4, (Math.PI * 5) / 4, (Math.PI * 7) / 4];
+    boltAngles.forEach(angle => {
+      const bx = Math.cos(angle) * 0.15;
+      const bz = Math.sin(angle) * 0.15;
+      
+      const boltGroup = new THREE.Group();
+      boltGroup.position.set(bx, 0.025, bz);
+      
+      const washer = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.005, 8), steelMat);
+      const boltHex = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.015, 6), brassMat);
+      boltHex.position.y = 0.008;
+      
+      boltGroup.add(washer);
+      boltGroup.add(boltHex);
+      basePlate.add(boltGroup);
+    });
+
+    // J1 Base Tower (Heavy rotational turret)
     const j1 = new THREE.Group();
-    j1.position.set(0, 0, 0);
+    j1.position.set(0, 0, 0); // raised above heavy base plate
     j1Ref.current = j1;
     robotGroup.add(j1);
 
-    const baseTurret = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.15, 0.12, 16), armMat);
-    baseTurret.position.y = 0.06;
-    baseTurret.castShadow = true;
-    j1.add(baseTurret);
+    // Turret shell (contoured step body)
+    const turretBody1 = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.14, 0.06, 16), metalMat);
+    turretBody1.position.y = 0.03;
+    turretBody1.castShadow = true;
+    j1.add(turretBody1);
 
-    const baseBlueRing = new THREE.Mesh(new THREE.CylinderGeometry(0.142, 0.142, 0.03, 16), jointMat);
-    baseBlueRing.position.y = 0.13;
-    j1.add(baseBlueRing);
+    const turretBody2 = new THREE.Mesh(new THREE.CylinderGeometry(0.142, 0.142, 0.05, 16), armMat);
+    turretBody2.position.y = 0.085;
+    turretBody2.castShadow = true;
+    j1.add(turretBody2);
 
-    // J2 Shoulder (Pitch)
+    // Holographic Base Glowing LED Ring (Digital twin state feedback)
+    const baseLedRing = new THREE.Mesh(new THREE.TorusGeometry(0.144, 0.006, 8, 24).rotateX(Math.PI / 2), ledGlowMat);
+    baseLedRing.position.y = 0.11;
+    baseLedRing.name = "base_led_ring";
+    j1.add(baseLedRing);
+
+    // Turret interface socket box (Pneumatic & Electrical main bus inputs)
+    const socketBox = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.05), metalMat);
+    socketBox.position.set(0, 0.06, -0.13);
+    j1.add(socketBox);
+
+    const auxCable = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.18, 8).rotateX(Math.PI / 2), darkCableMat);
+    auxCable.position.set(0, 0.06, -0.18);
+    j1.add(auxCable);
+
+    // J2 Shoulder Support Clevis (Two strong vertical forks holding J2 joint)
+    const clevisLeft = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.16, 0.12), armMat);
+    clevisLeft.position.set(-0.08, 0.19, 0.02);
+    clevisLeft.castShadow = true;
+    j1.add(clevisLeft);
+
+    const clevisRight = clevisLeft.clone();
+    clevisRight.position.x = 0.08;
+    j1.add(clevisRight);
+
+    // J2 Shoulder Pitch Axis (Rotational sleeve inside clevis)
     const j2 = new THREE.Group();
-    j2.position.set(0, 0.15, 0);
+    j2.position.set(0, 0.22, 0.02);
     j2Ref.current = j2;
     j1.add(j2);
 
-    const shoulderCap = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.18, 12).rotateZ(Math.PI / 2), metalMat);
+    // Shoulder cap cross barrel
+    const shoulderCap = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, 0.15, 12).rotateZ(Math.PI / 2), metalMat);
     shoulderCap.castShadow = true;
     j2.add(shoulderCap);
 
-    const blueCapL = new THREE.Mesh(new THREE.CylinderGeometry(0.086, 0.086, 0.03, 12).rotateZ(Math.PI / 2), jointMat);
-    blueCapL.position.x = -0.095;
-    const blueCapR = blueCapL.clone();
-    blueCapR.position.x = 0.095;
-    j2.add(blueCapL);
-    j2.add(blueCapR);
+    const shoulderBlueCapL = new THREE.Mesh(new THREE.CylinderGeometry(0.066, 0.066, 0.015, 12).rotateZ(Math.PI / 2), jointMat);
+    shoulderBlueCapL.position.x = -0.076;
+    const shoulderBlueCapR = shoulderBlueCapL.clone();
+    shoulderBlueCapR.position.x = 0.076;
+    j2.add(shoulderBlueCapL);
+    j2.add(shoulderBlueCapR);
 
-    // Bicep cylindrical link
-    const bicep = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.45, 16), armMat);
-    bicep.position.y = 0.225;
-    bicep.castShadow = true;
-    j2.add(bicep);
+    // Detailed side concentric planetary reducer plates
+    const reducerRing = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.004, 12).rotateZ(Math.PI / 2), steelMat);
+    reducerRing.position.x = 0.08;
+    j2.add(reducerRing);
 
-    // J3 Elbow (Pitch)
+    // Bicep Main Structure (Anodized titanium core with white protective casings)
+    const bicepGroup = new THREE.Group();
+    j2.add(bicepGroup);
+
+    // Core thick structural tube
+    const bicepCore = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.45, 12), metalMat);
+    bicepCore.position.y = 0.225;
+    bicepCore.castShadow = true;
+    bicepGroup.add(bicepCore);
+
+    // Molded white aerodynamic cover shells clasped over bicep core
+    const bicepShellL = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.38, 0.08), armMat);
+    bicepShellL.position.set(-0.04, 0.225, 0);
+    bicepShellL.castShadow = true;
+    
+    const bicepShellR = bicepShellL.clone();
+    bicepShellR.position.x = 0.04;
+    bicepGroup.add(bicepShellL);
+    bicepGroup.add(bicepShellR);
+
+    // Visual Zebra Stripe Warning decal plate on Bicep
+    const warningDecalPlate = new THREE.Mesh(new THREE.BoxGeometry(0.002, 0.07, 0.04), new THREE.MeshBasicMaterial({ color: 0xeab308 }));
+    warningDecalPlate.position.set(0.054, 0.25, 0);
+    bicepGroup.add(warningDecalPlate);
+
+    for (let s = -0.025; s <= 0.025; s += 0.015) {
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.001, 0.005, 0.042), new THREE.MeshBasicMaterial({ color: 0x111827 }));
+      stripe.position.set(0.055, 0.25 + s, 0);
+      stripe.rotation.x = Math.PI / 4;
+      bicepGroup.add(stripe);
+    }
+
+    // Heavy Industrial Backpressure Hydraulic Damper (Gas Cylinder) mounted parallel to bicep
+    const damperGroup = new THREE.Group();
+    damperGroup.position.set(-0.05, 0.05, 0.05);
+    bicepGroup.add(damperGroup);
+
+    const damperCasing = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.22, 8), metalMat);
+    damperCasing.position.y = 0.11;
+    damperCasing.castShadow = true;
+    damperGroup.add(damperCasing);
+
+    const damperRod = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.22, 8), steelMat);
+    damperRod.position.y = 0.24;
+    damperRod.castShadow = true;
+    damperGroup.add(damperRod);
+
+    const damperBaseFixture = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.02), steelMat);
+    damperBaseFixture.position.y = 0.001;
+    damperGroup.add(damperBaseFixture);
+
+    // J3 Elbow Joint Group (Pitch Axis)
     const j3 = new THREE.Group();
     j3.position.set(0, 0.45, 0);
     j3Ref.current = j3;
     j2.add(j3);
 
-    const elbowCap = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.15, 12).rotateZ(Math.PI / 2), metalMat);
-    elbowCap.castShadow = true;
-    j3.add(elbowCap);
+    // Heavy mechanical elbow box
+    const elbowHousing = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.11, 0.11), armMat);
+    elbowHousing.castShadow = true;
+    j3.add(elbowHousing);
 
-    const elbowCapL = new THREE.Mesh(new THREE.CylinderGeometry(0.076, 0.076, 0.03, 12).rotateZ(Math.PI / 2), jointMat);
-    elbowCapL.position.x = 0.08;
-    j3.add(elbowCapL);
+    // Center pitch shaft caps
+    const elbowPitchCap = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.10, 12).rotateZ(Math.PI / 2), metalMat);
+    elbowPitchCap.position.x = 0.01;
+    elbowPitchCap.castShadow = true;
+    j3.add(elbowPitchCap);
 
-    // Forearm cylindrical link
-    const forearm = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.4, 16), armMat);
-    forearm.position.y = 0.2;
-    forearm.castShadow = true;
-    j3.add(forearm);
+    const elbowPitchBlueCap = new THREE.Mesh(new THREE.CylinderGeometry(0.051, 0.051, 0.015, 12).rotateZ(Math.PI / 2), jointMat);
+    elbowPitchBlueCap.position.x = 0.058;
+    j3.add(elbowPitchBlueCap);
 
-    // J4 Wrist Rotate
+    // Tapered Forearm (Lower Arm) Link
+    const forearmGroup = new THREE.Group();
+    j3.add(forearmGroup);
+
+    const forearmTube = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.038, 0.4, 16), armMat);
+    forearmTube.position.y = 0.2;
+    forearmTube.castShadow = true;
+    forearmGroup.add(forearmTube);
+
+    // Embedded glowing neon LED indicator strip running down forearm
+    const forearmGlowBar = new THREE.Mesh(new THREE.BoxGeometry(0.004, 0.22, 0.028), ledGlowMat);
+    forearmGlowBar.position.set(0, 0.2, 0.026);
+    forearmGlowBar.name = "forearm_glow_bar";
+    forearmGroup.add(forearmGlowBar);
+
+    // Brand plate on forearm "HB-C6 PRO"
+    const infoPlate = new THREE.Mesh(new THREE.BoxGeometry(0.022, 0.06, 0.001), metalMat);
+    infoPlate.position.set(0.028, 0.28, 0);
+    infoPlate.rotation.y = Math.PI / 2;
+    forearmGroup.add(infoPlate);
+
+    const infoDecalText = new THREE.Mesh(new THREE.BoxGeometry(0.023, 0.04, 0.002), new THREE.MeshBasicMaterial({ color: 0x06b6d4 }));
+    infoDecalText.position.set(0.029, 0.28, 0);
+    infoDecalText.rotation.y = Math.PI / 2;
+    forearmGroup.add(infoDecalText);
+
+    // Ribbed black wire loom sweep: loops beautifully across elbow J3 (pure hardware physical geometry)
+    for (let c = 0; c < 8; c++) {
+      const sweepTorus = new THREE.Mesh(new THREE.TorusGeometry(0.032, 0.008, 6, 12, Math.PI), darkCableMat);
+      sweepTorus.position.set(-0.042, 0.0 + c * 0.004, -0.01);
+      sweepTorus.rotation.y = Math.PI / 2;
+      sweepTorus.rotation.z = Math.PI / 6 + c * 0.08;
+      j3.add(sweepTorus);
+    }
+
+    // J4 Wrist Rotate Joint (Roll Axis)
     const j4 = new THREE.Group();
     j4.position.set(0, 0.4, 0);
     j4Ref.current = j4;
     j3.add(j4);
 
-    const wristRoll = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.1, 12), metalMat);
-    wristRoll.position.y = 0.05;
-    j4.add(wristRoll);
+    const wristRollUpperCasing = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.04, 0.05, 12), metalMat);
+    wristRollUpperCasing.position.y = 0.025;
+    j4.add(wristRollUpperCasing);
 
-    const wristBlueRing = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.052, 0.02, 12), jointMat);
-    wristBlueRing.position.y = 0.1;
-    j4.add(wristBlueRing);
+    const wristRollBlueSleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.043, 0.043, 0.015, 12), jointMat);
+    wristRollBlueSleeve.position.y = 0.055;
+    j4.add(wristRollBlueSleeve);
 
-    // J5 Wrist Bend
+    const wristRollLowerCasing = new THREE.Mesh(new THREE.CylinderGeometry(0.038, 0.041, 0.03, 12), armMat);
+    wristRollLowerCasing.position.y = 0.075;
+    wristRollLowerCasing.castShadow = true;
+    j4.add(wristRollLowerCasing);
+
+    // J5 Wrist Bend/Pitch Axis Bracket (Yoke clevis style)
     const j5 = new THREE.Group();
-    j5.position.set(0, 0.11, 0);
+    j5.position.set(0, 0.1, 0);
     j5Ref.current = j5;
     j4.add(j5);
 
-    const wristPitch = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.1, 12).rotateX(Math.PI / 2), metalMat);
-    wristPitch.castShadow = true;
-    j5.add(wristPitch);
+    const wristPitchBracket = new THREE.Mesh(new THREE.BoxGeometry(0.062, 0.07, 0.062), armMat);
+    wristPitchBracket.position.y = 0.01;
+    wristPitchBracket.castShadow = true;
+    j5.add(wristPitchBracket);
 
-    const wristPitchCap = new THREE.Mesh(new THREE.CylinderGeometry(0.046, 0.046, 0.02, 12).rotateX(Math.PI / 2), jointMat);
-    wristPitchCap.position.z = 0.055;
-    j5.add(wristPitchCap);
+    const wristPitchCore = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.072, 12).rotateX(Math.PI / 2), metalMat);
+    wristPitchCore.position.y = 0.015;
+    wristPitchCore.castShadow = true;
+    j5.add(wristPitchCore);
 
-    // J6 End Tool Flange
+    const wristPitchBlueCap = new THREE.Mesh(new THREE.CylinderGeometry(0.033, 0.033, 0.008, 12).rotateX(Math.PI / 2), jointMat);
+    wristPitchBlueCap.position.set(0, 0.015, 0.037);
+    j5.add(wristPitchBlueCap);
+
+    // J6 End Tool Flange (Sleek rotating tool plate with dynamic status LED band)
     const j6 = new THREE.Group();
-    j6.position.set(0, 0.07, 0);
+    j6.position.set(0, 0.052, 0);
     j6Ref.current = j6;
     j5.add(j6);
 
-    const flangePlate = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.045, 0.02, 12), metalMat);
-    flangePlate.position.y = 0.01;
+    const flangeBase = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.038, 0.018, 12), metalMat);
+    flangeBase.position.y = 0.009;
+    flangeBase.castShadow = true;
+    j6.add(flangeBase);
+
+    // Glow Ring at Tool Attachment Point
+    const toolGlowBand = new THREE.Mesh(new THREE.CylinderGeometry(0.0355, 0.0355, 0.004, 12), ledGlowMat);
+    toolGlowBand.position.y = 0.019;
+    toolGlowBand.name = "wrist_led_ring";
+    j6.add(toolGlowBand);
+
+    const flangePlate = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.035, 0.008, 12), steelMat);
+    flangePlate.position.y = 0.024;
     j6.add(flangePlate);
+
+    // Thick coiled wire conduit wrapping wrist to gun
+    for (let w = 0; w < 12; w++) {
+      const wireSegment = new THREE.Mesh(new THREE.TorusGeometry(0.018, 0.004, 4, 10, Math.PI * 1.5), darkCableMat);
+      wireSegment.position.set(0.022, 0.02 - w * 0.004, 0.0);
+      wireSegment.rotation.y = Math.PI / 2;
+      wireSegment.rotation.x = w * 0.45;
+      j6.add(wireSegment);
+    }
 
     // SWAPPABLE INDUSTRIAL TOOL HEAD GROUP
     const toolGroup = new THREE.Group();
-    toolGroup.position.set(0, 0.02, 0);
+    toolGroup.position.set(0, 0.028, 0);
     toolGroupRef.current = toolGroup;
     j6.add(toolGroup);
 
-    // Build the specific tool head based on process
+    // Build swappable tool head mechanics
     buildProcessToolhead(toolGroup);
 
     scene.add(robotGroup);
   };
 
-  // Swappable Toolheads based on Active Craft Process
+  // Swappable Toolheads based on Active Craft Process (Highly Detailed CAD Equivalents)
   const buildProcessToolhead = (group: THREE.Group) => {
     // Clear any previous tools
     while (group.children.length > 0) {
       group.remove(group.children[0]);
     }
 
-    const darkMetal = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.85 });
-    const steel = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.9, roughness: 0.1 });
-    const goldenBrass = new THREE.MeshStandardMaterial({ color: 0xd97706, metalness: 0.8, roughness: 0.2 });
+    const darkMetal = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.85, roughness: 0.2 });
+    const steel = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.95, roughness: 0.1 });
+    const goldenBrass = new THREE.MeshStandardMaterial({ color: 0xd97706, metalness: 0.85, roughness: 0.15 });
+    const rubberMat = new THREE.MeshStandardMaterial({ color: 0x090d16, roughness: 0.8 });
+    const brightOrange = new THREE.MeshStandardMaterial({ color: 0xea580c, metalness: 0.2, roughness: 0.4 });
+    const whitePlasticsDeviceMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.15, metalness: 0.1 });
 
     switch (activeProcess) {
       case "rebar_lay": {
-        // Hydralic prongs rebar gripper
-        const adapter = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.02, 0.05, 12), darkMetal);
-        adapter.position.y = 0.025;
+        // High fidelity pneumatic rebar gripper
+        const adapter = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.025, 0.04, 12), darkMetal);
+        adapter.position.y = 0.015;
         group.add(adapter);
 
-        const corePanel = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.015, 0.04), steel);
-        corePanel.position.y = 0.055;
-        group.add(corePanel);
+        // Core rectangular pneumatic gripper block matching Festo industrial guidelines
+        const mainBlock = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.032, 0.052), steel);
+        mainBlock.position.y = 0.036;
+        group.add(mainBlock);
 
-        // Prong 1
-        const prong1 = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.06, 0.015), steel);
-        prong1.position.set(-0.04, 0.08, 0);
-        prong1.rotation.z = -0.1;
-        group.add(prong1);
+        // Linear slide guide bars
+        const slideBarL = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.1, 8).rotateZ(Math.PI / 2), steel);
+        slideBarL.position.y = 0.036;
+        group.add(slideBarL);
 
-        // Prong 2
-        const prong2 = prong1.clone();
-        prong2.position.x = 0.04;
-        prong2.rotation.z = 0.1;
-        group.add(prong2);
+        // Right side claw fingers with safety high-vis rubber pads
+        const clawL = new THREE.Group();
+        clawL.position.set(-0.042, 0.04, 0);
+        
+        const fingerL = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.065, 0.022), darkMetal);
+        fingerL.position.y = 0.025;
+        const padL = new THREE.Mesh(new THREE.BoxGeometry(0.005, 0.035, 0.024), brightOrange);
+        padL.position.set(0.008, 0.03, 0);
+        
+        clawL.add(fingerL);
+        clawL.add(padL);
+        group.add(clawL);
+
+        const clawR = clawL.clone();
+        clawR.position.x = 0.042;
+        clawR.rotation.y = Math.PI; // Flip pad inwards
+        group.add(clawR);
         break;
       }
       case "rebar_tie": {
-        // Tying nozzle needle + wire loader roll
-        const adapter = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.02, 0.05, 12), darkMetal);
-        adapter.position.y = 0.025;
+        // High fidelity automatic wire tying nozzle gun with wire coil rolls
+        const adapter = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.022, 0.03, 12), darkMetal);
+        adapter.position.y = 0.015;
         group.add(adapter);
 
-        // Tying gun housing
-        const body = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.12), darkMetal);
-        body.position.set(0, 0.075, 0.02);
-        group.add(body);
+        // Heavy dual-motor gun housing
+        const gearCase = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.06, 0.06), steel);
+        gearCase.position.set(0, 0.045, 0);
+        group.add(gearCase);
 
-        // Cylindrical tie gun wire roll on side
-        const roll = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.04, 12).rotateZ(Math.PI / 2), goldenBrass);
-        roll.position.set(-0.045, 0.075, 0);
-        group.add(roll);
+        const tieBody = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.055, 0.12), darkMetal);
+        tieBody.position.set(0, 0.075, 0.03);
+        group.add(tieBody);
 
-        // Needle tip protrusion pointed downwards
-        const needle = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.002, 0.06, 8), steel);
-        needle.position.set(0, 0.12, 0.04);
-        needle.rotation.x = -Math.PI / 6;
-        group.add(needle);
+        // Metallic spool container loaded with real-looking copper/bronze wire coils
+        const spoolDrum = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.028, 16).rotateZ(Math.PI / 2), rubberMat);
+        spoolDrum.position.set(-0.038, 0.075, 0.02);
+        group.add(spoolDrum);
+
+        // Copper core coils nested in spool drum
+        const wireCoils = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.024, 16).rotateZ(Math.PI / 2), goldenBrass);
+        wireCoils.position.copy(spoolDrum.position);
+        group.add(wireCoils);
+
+        // Curved steel loop guide needle tube pointing down
+        const guideTube = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.004, 0.07, 10), steel);
+        guideTube.position.set(0, 0.115, 0.065);
+        guideTube.rotation.x = -Math.PI / 5;
+        group.add(guideTube);
+
+        const wireGuideTip = new THREE.Mesh(new THREE.CylinderGeometry(0.003, 0.002, 0.015, 8), goldenBrass);
+        wireGuideTip.position.set(0, 0.148, 0.088);
+        wireGuideTip.rotation.x = -Math.PI / 5;
+        group.add(wireGuideTip);
         break;
       }
       case "concrete_pour": {
-        // High-viscosity wet concrete slurry nozzle + tube lines
-        const adapter = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.025, 0.04, 12), darkMetal);
-        adapter.position.y = 0.02;
+        // High fidelity modular slurry delivery head
+        const adapter = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.028, 0.03, 12), darkMetal);
+        adapter.position.y = 0.012;
         group.add(adapter);
 
-        // Slurry conduit head angled downward
-        const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.018, 0.1, 12), steel);
-        pipe.position.set(0, 0.06, 0.02);
-        pipe.rotation.x = Math.PI / 8;
-        group.add(pipe);
+        const flowControlValve = new THREE.Mesh(new THREE.BoxGeometry(0.052, 0.052, 0.052), steel);
+        flowControlValve.position.y = 0.04;
+        group.add(flowControlValve);
 
-        const rubberBumper = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.022, 0.02, 12), new THREE.MeshStandardMaterial({ color: 0x111827 }));
-        rubberBumper.position.y = 0.11;
-        group.add(rubberBumper);
+        // Rotary manual override handles on valve
+        const valveDial = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.01, 8).rotateZ(Math.PI / 2), brightOrange);
+        valveDial.position.set(0.028, 0.04, 0);
+        group.add(valveDial);
+
+        // Steel feed pipeline with heavy-duty black hose loop representation
+        const pipeStem = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.018, 0.08, 12), steel);
+        pipeStem.position.set(0, 0.09, 0.018);
+        pipeStem.rotation.x = Math.PI / 8;
+        group.add(pipeStem);
+
+        // Corrugated feed hose exit nozzle
+        const rubberExit = new THREE.Mesh(new THREE.CylinderGeometry(0.023, 0.016, 0.04, 12), rubberMat);
+        rubberExit.position.set(0, 0.14, 0.04);
+        rubberExit.rotation.x = Math.PI / 8;
+        group.add(rubberExit);
         break;
       }
       case "concrete_flat": {
-        // Micro-vibrating trowel leveling flat squeegee plate
-        const adapter = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.025, 0.05, 12), darkMetal);
-        adapter.position.y = 0.025;
+        // High fidelity dual-spring adaptive pressure squeegee screed tamping plate
+        const adapter = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.026, 0.03, 12), darkMetal);
+        adapter.position.y = 0.015;
         group.add(adapter);
 
-        // Long metallic tamping plate
-        const plate = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.01, 0.08), steel);
-        plate.position.set(0, 0.055, 0);
-        group.add(plate);
+        // Central cross bar frame
+        const mountingBar = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.016, 0.03), steel);
+        mountingBar.position.y = 0.032;
+        group.add(mountingBar);
 
-        // Vibrator motor box in center
-        const vBox = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.03, 0.04), darkMetal);
-        vBox.position.set(0, 0.07, 0);
-        group.add(vBox);
+        // Dual Shock Shock springs (Fender assemblies on left and right)
+        [-0.05, 0.05].forEach(offsetX => {
+          const damperGroup = new THREE.Group();
+          damperGroup.position.set(offsetX, 0.035, 0);
+
+          const damperBase = new THREE.Mesh(new THREE.BoxGeometry(0.016, 0.01, 0.016), darkMetal);
+          damperGroup.add(damperBase);
+
+          const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.005, 0.055), steel);
+          shaft.position.y = 0.025;
+          damperGroup.add(shaft);
+
+          // Build procedural spring coil out of stacked torus rings
+          for (let s = 1; s <= 5; s++) {
+            const coil = new THREE.Mesh(new THREE.TorusGeometry(0.01, 0.0025, 6, 12).rotateX(Math.PI / 2), steel);
+            coil.position.y = 0.005 + s * 0.007;
+            damperGroup.add(coil);
+          }
+
+          group.add(damperGroup);
+        });
+
+        // The broad horizontal scraping blade in polished aluminum
+        const scraperBlade = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.012, 0.06), steel);
+        scraperBlade.position.set(0, 0.08, 0);
+        group.add(scraperBlade);
+
+        // Cylinder vibrator eccenter motor mounted centrally on the scraping blade
+        const motorHousing = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.042, 10).rotateZ(Math.PI / 2), brightOrange);
+        motorHousing.position.set(0, 0.092, 0);
+        group.add(motorHousing);
         break;
       }
       case "brick_lay": {
-        // Vacuum slab manipulator gripper block
-        const adapter = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.025, 0.04, 12), darkMetal);
-        adapter.position.y = 0.02;
+        // High fidelity vacuum manipulator cup with pneumatic lines and vacuum meter
+        const adapter = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.026, 0.03, 12), darkMetal);
+        adapter.position.y = 0.012;
         group.add(adapter);
 
-        const blockY = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.02, 0.08), darkMetal);
-        blockY.position.y = 0.04;
-        group.add(blockY);
+        const spacer = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.02, 10), steel);
+        spacer.position.y = 0.03;
+        group.add(spacer);
 
-        // Two circular industrial vacuum suction cups
-        const cupGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.015, 16);
-        const cupMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.9 });
-        
-        const cup1 = new THREE.Mesh(cupGeo, cupMat);
-        cup1.position.set(-0.03, 0.05, 0);
-        group.add(cup1);
+        // Suction bracket cross plate
+        const crossPlate = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.014, 0.05), steel);
+        crossPlate.position.y = 0.042;
+        group.add(crossPlate);
 
-        const cup2 = cup1.clone();
-        cup2.position.set(0.03, 0.05, 0);
-        group.add(cup2);
+        // Dual 3-fold bellows heavy duty suction cups in black matte vulcanized rubber
+        [-0.04, 0.04].forEach(offsetX => {
+          const bellowsCup = new THREE.Group();
+          bellowsCup.position.set(offsetX, 0.045, 0);
+
+          // Top thin steel stem
+          const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.012), steel);
+          bellowsCup.add(stem);
+
+          // Bellow layer 1 (Wide cylinder)
+          const b1 = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.028, 0.01, 16), rubberMat);
+          b1.position.y = 0.013;
+          bellowsCup.add(b1);
+
+          // Bellow layer 2 (Medium cylinder)
+          const b2 = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.024, 0.01, 16), rubberMat);
+          b2.position.y = 0.021;
+          bellowsCup.add(b2);
+
+          // Bellow layer 3 (Tapered base lip)
+          const b3 = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.028, 0.012, 16), rubberMat);
+          b3.position.y = 0.03;
+          bellowsCup.add(b3);
+
+          group.add(bellowsCup);
+        });
+
+        // Vacuum feedback diagnostic gauge clock (high fidelity feature)
+        const dialBox = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.008, 12).rotateX(Math.PI / 2), darkMetal);
+        dialBox.position.set(0, 0.056, 0.026);
+        group.add(dialBox);
+
+        // Vibrant neon green glass screen face
+        const dialFace = new THREE.Mesh(new THREE.PlaneGeometry(0.02, 0.02), new THREE.MeshBasicMaterial({ color: 0x22c55e }));
+        dialFace.position.set(0, 0.056, 0.031);
+        group.add(dialFace);
         break;
       }
       case "tile_lay": {
-        // Multi-cup flat coordinate tiling sucker tool head
-        const adapter = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.025, 0.04, 12), darkMetal);
-        adapter.position.y = 0.02;
+        // High fidelity carbon-fiber quad vacuum matrix tile gripper
+        const adapter = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.025, 0.03, 12), darkMetal);
+        adapter.position.y = 0.015;
         group.add(adapter);
 
-        // Cruciform suction plate frame
-        const cross = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.012, 0.14), steel);
-        cross.position.y = 0.035;
-        group.add(cross);
+        // High gloss grid chassis frame (Carbon composite simulation)
+        const frameCenter = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.02, 0.04), steel);
+        frameCenter.position.y = 0.03;
+        group.add(frameCenter);
 
-        // 4 micro suction nodes
-        const miniCupGeo = new THREE.CylinderGeometry(0.018, 0.02, 0.01, 12);
-        const miniCupMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.9 });
+        // Left-right side carbon bar, front-back side carbon bar
+        const carbonPlateH = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.008, 0.03), darkMetal);
+        carbonPlateH.position.y = 0.036;
+        const carbonPlateV = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.008, 0.15), darkMetal);
+        carbonPlateV.position.y = 0.036;
+        group.add(carbonPlateH);
+        group.add(carbonPlateV);
 
+        // 4 Blue silicone spring loaded cushion suction cup columns
         const positions = [
-          [-0.05, -0.05], [0.05, -0.05],
-          [-0.05, 0.05], [0.05, 0.05],
+          [-0.065, -0.065], [0.065, -0.065],
+          [-0.065, 0.065], [0.065, 0.065]
         ];
 
+        const miniBellowsGeoLower = new THREE.CylinderGeometry(0.018, 0.02, 0.01, 12);
+        const miniBellowsGeoUpper = new THREE.CylinderGeometry(0.012, 0.018, 0.01, 12);
+        const blueSiliconeMat = new THREE.MeshStandardMaterial({ color: 0x3b82f6, roughness: 0.6 });
+
         positions.forEach(([cx, cz]) => {
-          const cup = new THREE.Mesh(miniCupGeo, miniCupMat);
-          cup.position.set(cx, 0.045, cz);
-          group.add(cup);
+          const cupGroup = new THREE.Group();
+          cupGroup.position.set(cx, 0.04, cz);
+
+          const metalSleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.015), steel);
+          cupGroup.add(metalSleeve);
+
+          const b1 = new THREE.Mesh(miniBellowsGeoUpper, blueSiliconeMat);
+          b1.position.y = 0.012;
+          cupGroup.add(b1);
+
+          const b2 = new THREE.Mesh(miniBellowsGeoLower, blueSiliconeMat);
+          b2.position.y = 0.021;
+          cupGroup.add(b2);
+
+          group.add(cupGroup);
         });
         break;
       }
       case "spray_wall":
       default: {
-        // Dual laser sensor + dual spray valve nozzles
-        const adapter = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.025, 0.04, 12), darkMetal);
-        adapter.position.y = 0.02;
+        // High fidelity dual-port electrostatic spray painting block with air & fluid coiled inlets
+        const adapter = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.025, 0.03, 12), darkMetal);
+        adapter.position.y = 0.012;
         group.add(adapter);
 
-        const valveBox = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.04, 0.12), steel);
-        valveBox.position.set(0, 0.05, 0);
-        group.add(valveBox);
+        const controlSubsystem = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.036, 0.11), whitePlasticsDeviceMat);
+        controlSubsystem.position.y = 0.035;
+        group.add(controlSubsystem);
 
-        // Brass spray nozzle outlets
-        const nozzleGeo = new THREE.CylinderGeometry(0.008, 0.01, 0.03, 10);
-        
-        const n1 = new THREE.Mesh(nozzleGeo, goldenBrass);
-        n1.position.set(-0.025, 0.08, 0.02);
-        n1.rotation.x = Math.PI / 8;
-        group.add(n1);
+        // Twin brass spray gun nozzles equipped with precision atomization guards
+        const corePipeL = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.05), steel);
+        corePipeL.position.set(-0.024, 0.055, 0.02);
+        corePipeL.rotation.x = Math.PI / 8;
+        group.add(corePipeL);
 
-        const n2 = n1.clone();
-        n2.position.x = 0.025;
-        group.add(n2);
+        const nozzleL = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.012, 0.025, 10), goldenBrass);
+        nozzleL.position.set(-0.024, 0.082, 0.034);
+        nozzleL.rotation.x = Math.PI / 8;
+        group.add(nozzleL);
+
+        const corePipeR = corePipeL.clone();
+        corePipeR.position.x = 0.024;
+        group.add(corePipeR);
+
+        const nozzleR = nozzleL.clone();
+        nozzleR.position.x = 0.024;
+        group.add(nozzleR);
+
+        // Air pressure regulation valves in safety blue
+        const adjustmentValves = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.006, 8).rotateZ(Math.PI / 2), steel);
+        adjustmentValves.position.set(0.039, 0.035, -0.02);
+        group.add(adjustmentValves);
         break;
       }
     }
@@ -1002,6 +1343,11 @@ export const ThreeSimulation: React.FC<ThreeSimulationProps> = ({
   const updateSimulationKinematics = (delta: number) => {
     if (!j1Ref.current || !j2Ref.current || !j3Ref.current || !j4Ref.current || !j5Ref.current || !j6Ref.current) return;
 
+    const isRunning = isRunningRef.current;
+    const isPaused = isPausedRef.current;
+    const clickPoints = clickPointsRef.current;
+    const playSpeed = playSpeedRef.current;
+
     // Increment simulated timestamp
     simulatedTimeRef.current += delta * playSpeed;
     const t = simulatedTimeRef.current;
@@ -1103,6 +1449,39 @@ export const ThreeSimulation: React.FC<ThreeSimulationProps> = ({
 
       // Turn off dynamic visual meshes
       toggleVisualProcessMashing(false);
+    }
+
+    // Real-time Animated LED Status indicators (Base, Forearm & Wrist flange indicators)
+    const robotGroup = robotGroupRef.current;
+    if (robotGroup) {
+      const baseLed = robotGroup.getObjectByName("base_led_ring") as THREE.Mesh;
+      const forearmGlow = robotGroup.getObjectByName("forearm_glow_bar") as THREE.Mesh;
+      const wristLed = robotGroup.getObjectByName("wrist_led_ring") as THREE.Mesh;
+
+      [baseLed, forearmGlow, wristLed].forEach(led => {
+        if (led && led.material instanceof THREE.MeshStandardMaterial) {
+          const mat = led.material;
+          if (isRunning && !isPaused) {
+            // Active simulation execution: breathe energetic teal-emerald
+            const pulse = (Math.sin(t * 8) + 1.0) * 0.5;
+            mat.color.setHex(0x10b981); // auto emerald green
+            mat.emissive.setHex(0x10b981);
+            mat.emissiveIntensity = 1.0 + pulse * 1.5;
+          } else if (isRunning && isPaused) {
+            // PAUSED warning safety indicator: amber flashing
+            const state = Math.floor(t * 5.0) % 2 === 0;
+            mat.color.setHex(state ? 0xf59e0b : 0x1e293b);
+            mat.emissive.setHex(state ? 0xf59e0b : 0x000000);
+            mat.emissiveIntensity = state ? 2.5 : 0.0;
+          } else {
+            // Idle waiting: warm gentle sapphire blue wave
+            const breathe = (Math.sin(t * 2.0) + 1.0) * 0.5;
+            mat.color.setHex(0x2563eb); // cobalt sapphire
+            mat.emissive.setHex(0x2563eb);
+            mat.emissiveIntensity = 0.5 + breathe * 0.8;
+          }
+        }
+      });
     }
   };
 

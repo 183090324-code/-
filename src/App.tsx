@@ -465,10 +465,13 @@ export default function App() {
         <aside className="w-[365px] flex flex-col flex-shrink-0 gap-6">
           
           {/* Joint Telemetry readout board */}
-          <div className="h-[260px] flex-shrink-0">
+          <div className="h-[430px] flex-shrink-0">
             <ParametersPanel
+              activeProcess={activeProcess}
               sceneType={activeProcess === "spray_wall" ? "spray" : "pour"}
               telemetry={telemetry}
+              clickPoints={clickPoints}
+              setClickPoints={setClickPoints}
             />
           </div>
 
